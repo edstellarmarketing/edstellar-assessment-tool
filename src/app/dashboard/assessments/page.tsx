@@ -254,8 +254,7 @@ export default function ManageAssessmentsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Manage Assessments</h2>
+      <div className="mb-6 flex items-center justify-end">
         <a
           href="/dashboard/assessments/new"
           className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
