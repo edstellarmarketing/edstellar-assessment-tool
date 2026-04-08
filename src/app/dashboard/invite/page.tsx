@@ -35,15 +35,16 @@ export default function InvitePage() {
   const [sending, setSending] = useState(false);
 
   // Result modal
-  const [inviteResult, setInviteResult] = useState<{
+  const [inviteResults, setInviteResults] = useState<{
     inviteLink: string;
     otp: string;
     email: string;
     assessmentName: string;
     emailSent: boolean;
     emailNote: string;
-  } | null>(null);
+  }[]>([]);
   const [copied, setCopied] = useState("");
+  const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
 
   const getAuthHeader = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -80,22 +81,57 @@ export default function InvitePage() {
     setSending(true);
     setError("");
 
+    // Parse comma/semicolon/newline separated emails
+    const emails = email
+      .split(/[,;\n]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e.length > 0);
+
+    if (emails.length === 0) {
+      setError("Please enter at least one email address.");
+      setSending(false);
+      return;
+    }
+
+    const results: typeof inviteResults = [];
+    const errors: string[] = [];
+
     try {
       const authHeader = await getAuthHeader();
-      const res = await fetch("/api/send-invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: authHeader },
-        body: JSON.stringify({ assessmentId: selectedAssessment.id, email }),
-      });
+      setSendProgress({ current: 0, total: emails.length });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to send invite");
-        setSending(false);
-        return;
+      for (let i = 0; i < emails.length; i++) {
+        const addr = emails[i];
+        setSendProgress({ current: i + 1, total: emails.length });
+
+        try {
+          const res = await fetch("/api/send-invite", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: authHeader },
+            body: JSON.stringify({ assessmentId: selectedAssessment.id, email: addr }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            errors.push(`${addr}: ${data.error || "Failed"}`);
+          } else {
+            results.push(data);
+          }
+        } catch {
+          errors.push(`${addr}: Network error`);
+        }
       }
 
-      setInviteResult(data);
+      if (errors.length > 0 && results.length === 0) {
+        setError(errors.join("; "));
+      } else if (errors.length > 0) {
+        setError(`Sent ${results.length}/${emails.length}. Failed: ${errors.join("; ")}`);
+      }
+
+      if (results.length > 0) {
+        setInviteResults(results);
+      }
+
       setSelectedAssessment(null);
       setEmail("");
 
@@ -109,10 +145,11 @@ export default function InvitePage() {
         if (newInvites) setInvites(newInvites as unknown as Invite[]);
       }
     } catch {
-      setError("Failed to send invite");
+      setError("Failed to send invites");
     }
 
     setSending(false);
+    setSendProgress(null);
   };
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -293,32 +330,45 @@ export default function InvitePage() {
       {selectedAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="mb-1 text-lg font-bold text-gray-900">Invite Participant</h3>
+            <h3 className="mb-1 text-lg font-bold text-gray-900">Invite Participants</h3>
             <p className="mb-5 text-sm text-gray-500">
-              Send an invite for <span className="font-medium text-gray-700">{selectedAssessment.name}</span>
+              Send invites for <span className="font-medium text-gray-700">{selectedAssessment.name}</span>
             </p>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Participant Email
+                Participant Email(s)
               </label>
-              <input
-                type="email"
+              <textarea
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="participant@example.com"
+                placeholder={"participant@example.com\nor comma separated:\nuser1@example.com, user2@example.com"}
+                rows={3}
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && email.trim()) handleInvite();
-                }}
               />
+              <p className="mt-1 text-xs text-gray-400">Separate multiple emails with commas, semicolons, or new lines.</p>
             </div>
+            {sendProgress && (
+              <div className="mt-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>Sending invites...</span>
+                  <span>{sendProgress.current}/{sendProgress.total}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all"
+                    style={{ width: `${(sendProgress.current / sendProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => {
                   setSelectedAssessment(null);
                   setEmail("");
                 }}
-                className="rounded-md bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                disabled={sending}
+                className="rounded-md bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -327,7 +377,7 @@ export default function InvitePage() {
                 disabled={sending || !email.trim()}
                 className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {sending ? "Sending..." : "Send Invite"}
+                {sending ? `Sending${sendProgress ? ` (${sendProgress.current}/${sendProgress.total})` : "..."}` : `Send Invite${email.includes(",") || email.includes(";") || email.includes("\n") ? "s" : ""}`}
               </button>
             </div>
           </div>
@@ -335,71 +385,133 @@ export default function InvitePage() {
       )}
 
       {/* Invite Result Modal */}
-      {inviteResult && (
+      {inviteResults.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
               <span className="text-xl">✓</span>
             </div>
-            <h3 className="mb-1 text-lg font-bold text-gray-900">Invite Created!</h3>
-            {inviteResult.emailSent ? (
-              <div className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
-                Email sent to {inviteResult.email}
-              </div>
-            ) : (
-              <div className="mb-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700">
-                Email not sent: {inviteResult.emailNote || "Unknown error"}
-              </div>
-            )}
+            <h3 className="mb-1 text-lg font-bold text-gray-900">
+              {inviteResults.length === 1 ? "Invite Created!" : `${inviteResults.length} Invites Created!`}
+            </h3>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500">Assessment Link</label>
-                <div className="mt-1 flex items-center gap-2">
-                  <code className="flex-1 truncate rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                    {inviteResult.inviteLink}
-                  </code>
+            {inviteResults.length === 1 ? (
+              <>
+                {inviteResults[0].emailSent ? (
+                  <div className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
+                    Email sent to {inviteResults[0].email}
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700">
+                    Email not sent: {inviteResults[0].emailNote || "Unknown error"}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500">Assessment Link</label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <code className="flex-1 truncate rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                        {inviteResults[0].inviteLink}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(inviteResults[0].inviteLink, "link")}
+                        className="shrink-0 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                      >
+                        {copied === "link" ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500">OTP Code</label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <code className="flex-1 rounded-md bg-gray-50 px-3 py-2 text-lg font-bold tracking-widest text-gray-900">
+                        {inviteResults[0].otp}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(inviteResults[0].otp, "otp")}
+                        className="shrink-0 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                      >
+                        {copied === "otp" ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500">Copy All</label>
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          `You've been invited to take the assessment: ${inviteResults[0].assessmentName}\n\nLink: ${inviteResults[0].inviteLink}\nOTP: ${inviteResults[0].otp}`,
+                          "all"
+                        )
+                      }
+                      className="mt-1 w-full rounded-md bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                    >
+                      {copied === "all" ? "Copied to clipboard!" : "Copy link + OTP as message"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
+                  {inviteResults.filter((r) => r.emailSent).length}/{inviteResults.length} emails sent successfully
+                </div>
+
+                <div className="max-h-64 space-y-2 overflow-y-auto">
+                  {inviteResults.map((r, i) => (
+                    <div key={i} className="rounded-md border border-gray-200 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">{r.email}</span>
+                        <span className={`text-xs font-medium ${r.emailSent ? "text-green-600" : "text-yellow-600"}`}>
+                          {r.emailSent ? "Sent" : "Not sent"}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-3 text-xs text-gray-500">
+                        <span>OTP: <code className="font-mono font-bold text-gray-700">{r.otp}</code></span>
+                        <button
+                          onClick={() => copyToClipboard(r.inviteLink, `link-${i}`)}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          {copied === `link-${i}` ? "Copied!" : "Copy Link"}
+                        </button>
+                        <button
+                          onClick={() =>
+                            copyToClipboard(
+                              `You've been invited to take the assessment: ${r.assessmentName}\n\nLink: ${r.inviteLink}\nOTP: ${r.otp}`,
+                              `all-${i}`
+                            )
+                          }
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          {copied === `all-${i}` ? "Copied!" : "Copy All"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3">
                   <button
-                    onClick={() => copyToClipboard(inviteResult.inviteLink, "link")}
-                    className="shrink-0 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    onClick={() =>
+                      copyToClipboard(
+                        inviteResults
+                          .map((r) => `${r.email}\nLink: ${r.inviteLink}\nOTP: ${r.otp}`)
+                          .join("\n\n"),
+                        "bulk-all"
+                      )
+                    }
+                    className="w-full rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
                   >
-                    {copied === "link" ? "Copied!" : "Copy"}
+                    {copied === "bulk-all" ? "Copied all to clipboard!" : "Copy all links + OTPs"}
                   </button>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500">OTP Code</label>
-                <div className="mt-1 flex items-center gap-2">
-                  <code className="flex-1 rounded-md bg-gray-50 px-3 py-2 text-lg font-bold tracking-widest text-gray-900">
-                    {inviteResult.otp}
-                  </code>
-                  <button
-                    onClick={() => copyToClipboard(inviteResult.otp, "otp")}
-                    className="shrink-0 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                  >
-                    {copied === "otp" ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500">Copy All</label>
-                <button
-                  onClick={() =>
-                    copyToClipboard(
-                      `You've been invited to take the assessment: ${inviteResult.assessmentName}\n\nLink: ${inviteResult.inviteLink}\nOTP: ${inviteResult.otp}`,
-                      "all"
-                    )
-                  }
-                  className="mt-1 w-full rounded-md bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200"
-                >
-                  {copied === "all" ? "Copied to clipboard!" : "Copy link + OTP as message"}
-                </button>
-              </div>
-            </div>
+              </>
+            )}
 
             <div className="mt-5 flex justify-end">
               <button
-                onClick={() => setInviteResult(null)}
+                onClick={() => setInviteResults([])}
                 className="rounded-md bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
               >
                 Done
