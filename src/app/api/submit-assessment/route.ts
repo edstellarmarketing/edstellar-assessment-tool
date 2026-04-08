@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
+import { sendEmail, reportEmailHtml } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   const { inviteId, answers } = await req.json();
@@ -10,7 +11,6 @@ export async function POST(req: NextRequest) {
 
   const admin = getSupabaseAdmin();
 
-  // Get invite with assessment and user info
   const { data: invite, error } = await admin
     .from("invites")
     .select("*, assessments(id, name, topic, total_questions, duration_minutes, questions, user_id)")
@@ -25,7 +25,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Already submitted" }, { status: 400 });
   }
 
-  // Calculate score
   const assessment = invite.assessments;
   let correctCount = 0;
   const totalQuestions = assessment.questions.length;
@@ -67,6 +66,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to save response" }, { status: 500 });
   }
 
+  const completedAt = new Date().toISOString();
+
   // Save to finished_assessments
   const { error: finishError } = await admin.from("finished_assessments").insert({
     user_id: assessment.user_id,
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
     score: correctCount,
     answers: detailedAnswers,
     started_at: invite.started_at,
-    completed_at: new Date().toISOString(),
+    completed_at: completedAt,
     duration_minutes: assessment.duration_minutes,
   });
 
@@ -91,12 +92,21 @@ export async function POST(req: NextRequest) {
   // Mark invite as completed
   await admin
     .from("invites")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .update({ status: "completed", completed_at: completedAt })
     .eq("id", inviteId);
+
+  // Send report email to participant
+  const timeTaken = invite.started_at
+    ? `${Math.floor((new Date(completedAt).getTime() - new Date(invite.started_at).getTime()) / 60000)}m`
+    : "—";
+
+  sendEmail({
+    to: invite.email,
+    subject: `Assessment Completed: ${assessment.name}`,
+    html: reportEmailHtml(assessment.name, correctCount, totalQuestions, mcqCount, timeTaken),
+  }).catch((e) => console.error("Report email error:", e));
 
   return NextResponse.json({
     message: "Assessment submitted successfully",
-    score: correctCount,
-    total: totalQuestions,
   });
 }
