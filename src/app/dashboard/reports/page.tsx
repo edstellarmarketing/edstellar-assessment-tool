@@ -49,6 +49,8 @@ export default function ReportsPage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sendStatus, setSendStatus] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -167,6 +169,28 @@ export default function ReportsPage() {
       setError("Failed to evaluate prompts. Please try again.");
     } finally {
       setEvaluatingId(null);
+    }
+  };
+
+  const deleteReport = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const { error: delError } = await supabase
+        .from("finished_assessments")
+        .delete()
+        .eq("id", id);
+
+      if (delError) {
+        setError("Failed to delete report: " + delError.message);
+      } else {
+        setReports((prev) => prev.filter((r) => r.id !== id));
+        if (viewReport?.id === id) setViewReport(null);
+      }
+    } catch {
+      setError("Failed to delete report. Please try again.");
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -331,6 +355,13 @@ export default function ReportsPage() {
                         >
                           {sendingId === r.id ? "Sending..." : "Send Results"}
                         </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(r.id)}
+                          disabled={deletingId === r.id}
+                          className="rounded-md bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {deletingId === r.id ? "Deleting..." : "Delete"}
+                        </button>
                         {sendStatus?.id === r.id && (
                           <span className={`text-xs ${sendStatus.success ? "text-green-600" : "text-red-600"}`}>
                             {sendStatus.message}
@@ -344,6 +375,33 @@ export default function ReportsPage() {
             </table>
           </div>
         </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900">Delete Report</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you sure you want to delete this completed assessment report? This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteReport(confirmDeleteId)}
+                disabled={deletingId === confirmDeleteId}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingId === confirmDeleteId ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Detail Modal */}
