@@ -89,58 +89,68 @@ export default function SettingsPage() {
   }, []);
 
   const fetchSettings = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from("settings")
-      .select("openrouter_api_key, tavily_api_key, openrouter_model")
-      .eq("user_id", userId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from("settings")
+        .select("openrouter_api_key, tavily_api_key, openrouter_model")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    if (error) {
-      console.error("Failed to fetch settings:", error);
-      return;
-    }
+      if (error) {
+        console.error("Failed to fetch settings:", error);
+        return;
+      }
 
-    if (data) {
-      const loaded: SettingsData = {
-        openrouter_api_key: data.openrouter_api_key || "",
-        tavily_api_key: data.tavily_api_key || "",
-        openrouter_model: data.openrouter_model || "",
-      };
-      setSettings(loaded);
-      setSavedSettings(loaded);
+      if (data) {
+        const loaded: SettingsData = {
+          openrouter_api_key: data.openrouter_api_key || "",
+          tavily_api_key: data.tavily_api_key || "",
+          openrouter_model: data.openrouter_model || "",
+        };
+        setSettings(loaded);
+        setSavedSettings(loaded);
+      }
+    } catch (e) {
+      console.error("Exception fetching settings:", e);
     }
   }, []);
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    let mounted = true;
 
+    const loadSettings = async (userId: string) => {
+      try {
+        await fetchSettings(userId);
+      } catch (e) {
+        console.error("Error loading settings:", e);
+      }
+      if (mounted) setLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       if (!session) {
         router.push("/");
         return;
       }
-
       setUser(session.user);
-      await fetchSettings(session.user.id);
-      setLoading(false);
-    };
-
-    init();
+      loadSettings(session.user.id);
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        if (!mounted) return;
         if (!session) {
           router.push("/");
           return;
         }
-
         setUser(session.user);
-        await fetchSettings(session.user.id);
-        setLoading(false);
+        loadSettings(session.user.id);
       }
     );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [router, fetchSettings]);
