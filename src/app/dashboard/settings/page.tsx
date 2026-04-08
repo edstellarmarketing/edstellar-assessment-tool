@@ -90,14 +90,17 @@ export default function SettingsPage() {
 
   const fetchSettings = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from("settings")
         .select("openrouter_api_key, tavily_api_key, openrouter_model")
         .eq("user_id", userId)
         .maybeSingle();
 
+      console.log("Fetch settings:", { data, error, status, userId });
+
       if (error) {
         console.error("Failed to fetch settings:", error);
+        setMessage({ type: "error", text: `Failed to load settings: ${error.message}` });
         return;
       }
 
@@ -112,6 +115,7 @@ export default function SettingsPage() {
       }
     } catch (e) {
       console.error("Exception fetching settings:", e);
+      setMessage({ type: "error", text: "Exception loading settings. Check console." });
     }
   }, []);
 
@@ -155,27 +159,34 @@ export default function SettingsPage() {
     };
   }, [router, fetchSettings]);
 
-  // Save a single field — always writes all fields to prevent overwrites
+  // Save all fields then re-fetch to confirm persistence
   const saveToDb = async (newSettings: SettingsData): Promise<boolean> => {
     if (!user) return false;
 
-    const { error } = await supabase.from("settings").upsert(
-      {
-        user_id: user.id,
-        openrouter_api_key: newSettings.openrouter_api_key || null,
-        tavily_api_key: newSettings.tavily_api_key || null,
-        openrouter_model: newSettings.openrouter_model || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    const payload = {
+      user_id: user.id,
+      openrouter_api_key: newSettings.openrouter_api_key || null,
+      tavily_api_key: newSettings.tavily_api_key || null,
+      openrouter_model: newSettings.openrouter_model || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    console.log("Saving settings:", payload);
+
+    const { error, data } = await supabase
+      .from("settings")
+      .upsert(payload, { onConflict: "user_id" })
+      .select();
+
+    console.log("Save result:", { data, error });
 
     if (error) {
       console.error("Failed to save settings:", error);
       return false;
     }
 
-    setSavedSettings({ ...newSettings });
+    // Re-fetch to confirm what's actually in the DB
+    await fetchSettings(user.id);
     return true;
   };
 
