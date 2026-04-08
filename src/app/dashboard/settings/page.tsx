@@ -112,6 +112,21 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/");
+        return;
+      }
+
+      setUser(session.user);
+      await fetchSettings(session.user.id);
+      setLoading(false);
+    };
+
+    init();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!session) {
