@@ -118,18 +118,41 @@ export default function SettingsPage() {
     setTimeout(() => setMessage(null), 3000);
   };
 
+  const ensureSettingsRow = async () => {
+    if (!user) return false;
+    const { data } = await supabase
+      .from("settings")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!data) {
+      const { error } = await supabase.from("settings").insert({
+        user_id: user.id,
+      });
+      if (error) return false;
+    }
+    return true;
+  };
+
   const handleSave = async (field: string) => {
     if (!user) return;
     setSavingField(field);
 
-    const { error } = await supabase.from("settings").upsert(
-      {
-        user_id: user.id,
+    const rowExists = await ensureSettingsRow();
+    if (!rowExists) {
+      setSavingField(null);
+      showMessage("error", "Failed to save key.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("settings")
+      .update({
         [field]: keys[field] || null,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+      })
+      .eq("user_id", user.id);
 
     setSavingField(null);
 
@@ -146,14 +169,13 @@ export default function SettingsPage() {
     if (!user) return;
     setDeletingField(field);
 
-    const { error } = await supabase.from("settings").upsert(
-      {
-        user_id: user.id,
+    const { error } = await supabase
+      .from("settings")
+      .update({
         [field]: null,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+      })
+      .eq("user_id", user.id);
 
     setDeletingField(null);
     setConfirmDelete(null);
@@ -178,14 +200,20 @@ export default function SettingsPage() {
     if (!user) return;
     setSavingModel(true);
 
-    const { error } = await supabase.from("settings").upsert(
-      {
-        user_id: user.id,
+    const rowExists = await ensureSettingsRow();
+    if (!rowExists) {
+      setSavingModel(false);
+      showMessage("error", "Failed to save model.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("settings")
+      .update({
         openrouter_model: selectedModel || null,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+      })
+      .eq("user_id", user.id);
 
     setSavingModel(false);
 
