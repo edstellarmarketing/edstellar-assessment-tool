@@ -10,6 +10,8 @@ interface DetailedAnswer {
   userAnswer: string;
   correctAnswer: string;
   isCorrect: boolean | null;
+  promptScore?: number | null;
+  promptFeedback?: string | null;
 }
 
 interface FinishedAssessment {
@@ -24,6 +26,9 @@ interface FinishedAssessment {
   started_at: string;
   completed_at: string;
   duration_minutes: number;
+  assessment_type?: string;
+  prompt_score?: number | null;
+  prompt_evaluated?: boolean;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -31,6 +36,7 @@ const TYPE_LABELS: Record<string, string> = {
   short_answer: "Short Answer",
   long_answer: "Long Answer",
   attachment: "Attachment",
+  prompting: "AI Prompt",
 };
 
 export default function ReportsPage() {
@@ -40,6 +46,7 @@ export default function ReportsPage() {
   const [viewReport, setViewReport] = useState<FinishedAssessment | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sendStatus, setSendStatus] = useState<{ id: string; success: boolean; message: string } | null>(null);
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -113,12 +120,70 @@ export default function ReportsPage() {
     }
   };
 
+  const evaluatePrompts = async (report: FinishedAssessment) => {
+    setEvaluatingId(report.id);
+    setError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch("/api/evaluate-prompt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ reportId: report.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to evaluate prompts");
+        setEvaluatingId(null);
+        return;
+      }
+
+      // Update the report in state
+      setReports((prev) =>
+        prev.map((r) =>
+          r.id === report.id
+            ? { ...r, answers: data.answers, prompt_score: data.avgScore, prompt_evaluated: true }
+            : r
+        )
+      );
+
+      // Update viewReport if it's open
+      if (viewReport?.id === report.id) {
+        setViewReport({
+          ...viewReport,
+          answers: data.answers,
+          prompt_score: data.avgScore,
+          prompt_evaluated: true,
+        });
+      }
+    } catch {
+      setError("Failed to evaluate prompts. Please try again.");
+    } finally {
+      setEvaluatingId(null);
+    }
+  };
+
   const getScoreColor = (score: number, total: number) => {
     if (total === 0) return "text-gray-500";
     const pct = (score / total) * 100;
     if (pct >= 80) return "text-green-600";
     if (pct >= 50) return "text-yellow-600";
     return "text-red-600";
+  };
+
+  const getPromptScoreColor = (score: number) => {
+    if (score >= 8) return "text-green-600";
+    if (score >= 5) return "text-yellow-600";
+    return "text-red-600";
+  };
+
+  const isPromptingAssessment = (report: FinishedAssessment) => {
+    return report.assessment_type === "prompting" || report.answers?.some((a) => a.type === "prompting");
   };
 
   if (loading) {
@@ -185,7 +250,7 @@ export default function ReportsPage() {
                 <tr>
                   <th className="px-4 py-3 font-medium text-gray-600">Participant</th>
                   <th className="px-4 py-3 font-medium text-gray-600">Assessment</th>
-                  <th className="px-4 py-3 font-medium text-gray-600">MCQ Score</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Score</th>
                   <th className="px-4 py-3 font-medium text-gray-600">Time Taken</th>
                   <th className="px-4 py-3 font-medium text-gray-600">Completed</th>
                   <th className="px-4 py-3 font-medium text-gray-600"></th>
@@ -198,11 +263,26 @@ export default function ReportsPage() {
                     <td className="px-4 py-3">
                       <div>
                         <p className="font-medium text-gray-900">{r.assessment_name}</p>
-                        <p className="text-xs text-gray-500">{r.total_questions} questions</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-gray-500">{r.total_questions} questions</p>
+                          {isPromptingAssessment(r) && (
+                            <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+                              Prompting
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      {r.mcq_questions > 0 ? (
+                      {isPromptingAssessment(r) ? (
+                        r.prompt_evaluated && r.prompt_score != null ? (
+                          <span className={`font-semibold ${getPromptScoreColor(r.prompt_score)}`}>
+                            {r.prompt_score}/10
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">Not evaluated</span>
+                        )
+                      ) : r.mcq_questions > 0 ? (
                         <span className={`font-semibold ${getScoreColor(r.score, r.mcq_questions)}`}>
                           {r.score}/{r.mcq_questions}
                           <span className="ml-1 text-xs font-normal text-gray-400">
@@ -227,6 +307,15 @@ export default function ReportsPage() {
                         >
                           View Details
                         </button>
+                        {isPromptingAssessment(r) && !r.prompt_evaluated && (
+                          <button
+                            onClick={() => evaluatePrompts(r)}
+                            disabled={evaluatingId === r.id}
+                            className="rounded-md bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                          >
+                            {evaluatingId === r.id ? "Evaluating..." : "Evaluate Prompts"}
+                          </button>
+                        )}
                         <button
                           onClick={() => sendResults(r)}
                           disabled={sendingId === r.id}
@@ -256,7 +345,14 @@ export default function ReportsPage() {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">{viewReport.assessment_name}</h3>
-                <p className="text-sm text-gray-500">{viewReport.participant_email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-500">{viewReport.participant_email}</p>
+                  {isPromptingAssessment(viewReport) && (
+                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                      Prompting Assessment
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setViewReport(null)}
@@ -269,15 +365,24 @@ export default function ReportsPage() {
             </div>
 
             {/* Score summary */}
-            <div className="mb-5 grid grid-cols-3 gap-3">
-              <div className="rounded-md bg-gray-50 p-3 text-center">
-                <p className="text-xs text-gray-500">MCQ Score</p>
-                <p className={`text-lg font-bold ${getScoreColor(viewReport.score, viewReport.mcq_questions)}`}>
-                  {viewReport.mcq_questions > 0
-                    ? `${viewReport.score}/${viewReport.mcq_questions}`
-                    : "—"}
-                </p>
-              </div>
+            <div className={`mb-5 grid gap-3 ${isPromptingAssessment(viewReport) ? "grid-cols-3" : "grid-cols-3"}`}>
+              {isPromptingAssessment(viewReport) ? (
+                <div className="rounded-md bg-purple-50 p-3 text-center">
+                  <p className="text-xs text-gray-500">Prompt Score</p>
+                  <p className={`text-lg font-bold ${viewReport.prompt_score != null ? getPromptScoreColor(viewReport.prompt_score) : "text-gray-400"}`}>
+                    {viewReport.prompt_score != null ? `${viewReport.prompt_score}/10` : "Not evaluated"}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-md bg-gray-50 p-3 text-center">
+                  <p className="text-xs text-gray-500">MCQ Score</p>
+                  <p className={`text-lg font-bold ${getScoreColor(viewReport.score, viewReport.mcq_questions)}`}>
+                    {viewReport.mcq_questions > 0
+                      ? `${viewReport.score}/${viewReport.mcq_questions}`
+                      : "—"}
+                  </p>
+                </div>
+              )}
               <div className="rounded-md bg-gray-50 p-3 text-center">
                 <p className="text-xs text-gray-500">Time Taken</p>
                 <p className="text-lg font-bold text-gray-900">
@@ -290,17 +395,51 @@ export default function ReportsPage() {
               </div>
             </div>
 
+            {/* Evaluate button for prompting assessments */}
+            {isPromptingAssessment(viewReport) && !viewReport.prompt_evaluated && (
+              <div className="mb-5 rounded-md border border-purple-200 bg-purple-50 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-purple-900">Prompt evaluation pending</p>
+                    <p className="text-xs text-purple-600">Run AI evaluation to score the participant&apos;s prompts and generate feedback.</p>
+                  </div>
+                  <button
+                    onClick={() => evaluatePrompts(viewReport)}
+                    disabled={evaluatingId === viewReport.id}
+                    className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {evaluatingId === viewReport.id ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Evaluating...
+                      </span>
+                    ) : (
+                      "Evaluate Prompts"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Answers */}
             <div className="max-h-[55vh] space-y-3 overflow-y-auto">
               {viewReport.answers.map((a, i) => (
                 <div
                   key={i}
                   className={`rounded-md border p-4 ${
-                    a.isCorrect === true
-                      ? "border-green-200 bg-green-50/50"
-                      : a.isCorrect === false
-                        ? "border-red-200 bg-red-50/50"
-                        : "border-gray-200"
+                    a.type === "prompting"
+                      ? a.promptScore != null
+                        ? a.promptScore >= 7
+                          ? "border-green-200 bg-green-50/50"
+                          : a.promptScore >= 4
+                            ? "border-yellow-200 bg-yellow-50/50"
+                            : "border-red-200 bg-red-50/50"
+                        : "border-purple-200 bg-purple-50/30"
+                      : a.isCorrect === true
+                        ? "border-green-200 bg-green-50/50"
+                        : a.isCorrect === false
+                          ? "border-red-200 bg-red-50/50"
+                          : "border-gray-200"
                   }`}
                 >
                   <div className="mb-2 flex items-center justify-between">
@@ -311,6 +450,17 @@ export default function ReportsPage() {
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                         {TYPE_LABELS[a.type] || a.type}
                       </span>
+                      {a.type === "prompting" && a.promptScore != null && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          a.promptScore >= 7
+                            ? "bg-green-100 text-green-700"
+                            : a.promptScore >= 4
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-red-100 text-red-700"
+                        }`}>
+                          Score: {a.promptScore}/10
+                        </span>
+                      )}
                       {a.isCorrect === true && (
                         <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                           Correct
@@ -327,12 +477,20 @@ export default function ReportsPage() {
 
                   <div className="mt-2 space-y-1.5">
                     <div>
-                      <span className="text-xs font-medium text-gray-500">Participant&apos;s Answer:</span>
+                      <span className="text-xs font-medium text-gray-500">
+                        {a.type === "prompting" ? "Participant\u2019s Prompt:" : "Participant\u2019s Answer:"}
+                      </span>
                       <p className={`text-sm ${a.userAnswer ? "text-gray-700" : "italic text-gray-400"}`}>
                         {a.userAnswer || "No answer provided"}
                       </p>
                     </div>
-                    {a.correctAnswer && (
+                    {a.type === "prompting" && a.promptFeedback && (
+                      <div className="mt-2 rounded-md bg-white/80 p-3">
+                        <span className="text-xs font-medium text-purple-600">AI Feedback:</span>
+                        <p className="mt-1 text-sm text-gray-700">{a.promptFeedback}</p>
+                      </div>
+                    )}
+                    {a.type !== "prompting" && a.correctAnswer && (
                       <div>
                         <span className="text-xs font-medium text-green-600">Correct Answer:</span>
                         <p className="text-sm text-green-700">{a.correctAnswer}</p>
@@ -348,6 +506,15 @@ export default function ReportsPage() {
                 <span className={`text-sm ${sendStatus.success ? "text-green-600" : "text-red-600"}`}>
                   {sendStatus.message}
                 </span>
+              )}
+              {isPromptingAssessment(viewReport) && !viewReport.prompt_evaluated && (
+                <button
+                  onClick={() => evaluatePrompts(viewReport)}
+                  disabled={evaluatingId === viewReport.id}
+                  className="rounded-md bg-purple-600 px-5 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {evaluatingId === viewReport.id ? "Evaluating..." : "Evaluate Prompts"}
+                </button>
               )}
               <button
                 onClick={() => sendResults(viewReport)}

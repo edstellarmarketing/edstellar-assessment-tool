@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 
 interface Question {
   question: string;
-  type: "mcq" | "short_answer" | "long_answer" | "attachment";
+  type: "mcq" | "short_answer" | "long_answer" | "attachment" | "prompting";
   options?: string[];
   correct_answer?: string;
 }
@@ -18,11 +18,14 @@ const QUESTION_TYPES = [
   { value: "attachment", label: "Attachment" },
 ];
 
+type AssessmentType = "mcq" | "prompting" | null;
+
 export default function NewAssessmentPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [assessmentType, setAssessmentType] = useState<AssessmentType>(null);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -33,6 +36,9 @@ export default function NewAssessmentPage() {
   const [topic, setTopic] = useState("");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Prompting assessment state
+  const [promptQuestions, setPromptQuestions] = useState<{ question: string }[]>([{ question: "" }]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -128,8 +134,67 @@ export default function NewAssessmentPage() {
     setStep(5);
   };
 
+  const handleSavePrompting = async () => {
+    if (!userId) return;
+    const validQuestions = promptQuestions.filter((q) => q.question.trim());
+    if (validQuestions.length === 0) {
+      setError("Please add at least one question.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+
+    const questionsData: Question[] = validQuestions.map((q) => ({
+      question: q.question.trim(),
+      type: "prompting" as const,
+    }));
+
+    const { error: saveError } = await supabase.from("assessments").insert({
+      user_id: userId,
+      name,
+      topic: "AI Prompting Assessment",
+      total_questions: validQuestions.length,
+      duration_minutes: duration,
+      questions: questionsData,
+      assessment_type: "prompting",
+    });
+
+    setSaving(false);
+
+    if (saveError) {
+      setError("Failed to save assessment: " + saveError.message);
+      return;
+    }
+
+    setStep(5);
+  };
+
   const updateQuestionType = (index: number, type: Question["type"]) => {
     setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, type } : q)));
+  };
+
+  const addPromptQuestion = () => {
+    setPromptQuestions((prev) => [...prev, { question: "" }]);
+  };
+
+  const updatePromptQuestion = (index: number, value: string) => {
+    setPromptQuestions((prev) => prev.map((q, i) => (i === index ? { question: value } : q)));
+  };
+
+  const removePromptQuestion = (index: number) => {
+    setPromptQuestions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resetAll = () => {
+    setAssessmentType(null);
+    setStep(1);
+    setName("");
+    setTotalQuestions(10);
+    setDuration(30);
+    setTopic("");
+    setQuestions([]);
+    setPromptQuestions([{ question: "" }]);
+    setError("");
   };
 
   if (loading) {
@@ -140,6 +205,215 @@ export default function NewAssessmentPage() {
     );
   }
 
+  // Assessment type selection
+  if (!assessmentType) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        <h2 className="mb-8 text-2xl font-bold text-gray-900">Create New Assessment</h2>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {/* MCQ Card */}
+          <button
+            onClick={() => setAssessmentType("mcq")}
+            className="group rounded-xl border-2 border-gray-200 bg-white p-8 text-left shadow-sm transition-all hover:border-blue-500 hover:shadow-md"
+          >
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-lg font-bold text-gray-900">MCQ Assessment</h3>
+            <p className="text-sm text-gray-500">
+              Create a traditional assessment with multiple choice, short answer, long answer, and attachment questions. AI generates questions and answers based on your topic.
+            </p>
+          </button>
+
+          {/* Prompting Assessment Card */}
+          <button
+            onClick={() => setAssessmentType("prompting")}
+            className="group rounded-xl border-2 border-gray-200 bg-white p-8 text-left shadow-sm transition-all hover:border-purple-500 hover:shadow-md"
+          >
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-purple-100 text-purple-600 transition-colors group-hover:bg-purple-600 group-hover:text-white">
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-lg font-bold text-gray-900">AI Prompting Assessment</h3>
+            <p className="text-sm text-gray-500">
+              Create an assessment where participants write AI prompts. You define the questions, participants submit their prompts, and AI evaluates the accuracy of their responses.
+            </p>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── PROMPTING ASSESSMENT FLOW ───
+  if (assessmentType === "prompting") {
+    return (
+      <div className="mx-auto max-w-4xl">
+        {/* Step indicator */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            {["Details", "Questions", "Saved"].map((label, i) => (
+              <div key={label} className="flex items-center">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
+                    step > i + 1
+                      ? "bg-green-500 text-white"
+                      : step === i + 1
+                        ? "bg-purple-600 text-white"
+                        : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {step > i + 1 ? "✓" : i + 1}
+                </div>
+                <span className={`ml-2 text-sm ${step === i + 1 ? "font-medium text-gray-900" : "text-gray-500"}`}>
+                  {label}
+                </span>
+                {i < 2 && <div className="mx-4 h-px w-8 bg-gray-300 sm:w-16" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-6 rounded-md bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        )}
+
+        {/* Step 1: Details */}
+        {step === 1 && (
+          <div className="rounded-lg bg-white p-8 shadow-sm">
+            <div className="mb-6 flex items-center gap-3">
+              <button
+                onClick={() => setAssessmentType(null)}
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+              </button>
+              <h2 className="text-xl font-bold text-gray-900">AI Prompting Assessment Details</h2>
+            </div>
+            <div className="space-y-5">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Assessment Name</label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. AI Prompt Engineering Challenge"
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Duration (minutes)</label>
+                <input
+                  id="duration"
+                  type="number"
+                  min={1}
+                  max={300}
+                  value={duration}
+                  onChange={(e) => setDuration(parseInt(e.target.value) || 1)}
+                  className="mt-1 w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+              <div className="pt-4">
+                <button
+                  onClick={() => {
+                    if (!name.trim()) { setError("Please enter an assessment name."); return; }
+                    setError("");
+                    setStep(2);
+                  }}
+                  className="rounded-md bg-purple-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-purple-700"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Enter Questions */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-white p-6 shadow-sm">
+              <h2 className="mb-2 text-xl font-bold text-gray-900">Define Prompting Questions</h2>
+              <p className="text-sm text-gray-500">
+                Enter the questions that participants will need to write AI prompts for. Each question should describe a task or goal that the participant must craft an effective prompt to achieve.
+              </p>
+            </div>
+
+            {promptQuestions.map((q, i) => (
+              <div key={i} className="rounded-lg bg-white p-6 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-400">Question {i + 1}</span>
+                  {promptQuestions.length > 1 && (
+                    <button
+                      onClick={() => removePromptQuestion(i)}
+                      className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={q.question}
+                  onChange={(e) => updatePromptQuestion(i, e.target.value)}
+                  placeholder="e.g. Write a prompt that generates a Python function to sort a list of dictionaries by a specific key..."
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+            ))}
+
+            <button
+              onClick={addPromptQuestion}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white py-4 text-sm font-medium text-gray-500 hover:border-purple-400 hover:text-purple-600"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add Another Question
+            </button>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setStep(1)} className="rounded-md bg-gray-100 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200">Back</button>
+              <button
+                onClick={handleSavePrompting}
+                disabled={saving}
+                className="rounded-md bg-purple-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Assessment"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Success */}
+        {step === 5 && (
+          <div className="rounded-lg bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <span className="text-3xl">✓</span>
+            </div>
+            <h2 className="mb-2 text-xl font-bold text-gray-900">Prompting Assessment Saved!</h2>
+            <p className="mb-6 text-sm text-gray-500">
+              &ldquo;{name}&rdquo; with {promptQuestions.filter((q) => q.question.trim()).length} prompting question(s) has been saved successfully. You can now send it to participants via the Invite page.
+            </p>
+            <div className="flex justify-center gap-3">
+              <a href="/dashboard" className="rounded-md bg-gray-100 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200">Back to Dashboard</a>
+              <a href="/dashboard/invite" className="rounded-md bg-purple-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-purple-700">Invite Participants</a>
+              <button onClick={resetAll} className="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700">Create Another</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── MCQ ASSESSMENT FLOW (original) ───
   return (
     <div className="mx-auto max-w-4xl">
       {/* Step indicator */}
@@ -174,7 +448,17 @@ export default function NewAssessmentPage() {
       {/* Step 1: Details */}
       {step === 1 && (
         <div className="rounded-lg bg-white p-8 shadow-sm">
-          <h2 className="mb-6 text-xl font-bold text-gray-900">Assessment Details</h2>
+          <div className="mb-6 flex items-center gap-3">
+            <button
+              onClick={() => setAssessmentType(null)}
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </button>
+            <h2 className="text-xl font-bold text-gray-900">Assessment Details</h2>
+          </div>
           <div className="space-y-5">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">Assessment Name</label>
@@ -376,7 +660,7 @@ export default function NewAssessmentPage() {
           <div className="flex justify-center gap-3">
             <a href="/dashboard" className="rounded-md bg-gray-100 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200">Back to Dashboard</a>
             <button
-              onClick={() => { setStep(1); setName(""); setTotalQuestions(10); setDuration(30); setTopic(""); setQuestions([]); setError(""); }}
+              onClick={resetAll}
               className="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
             >
               Create Another

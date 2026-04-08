@@ -241,7 +241,9 @@ export default function AssessmentPage() {
                         ? "Short Answer"
                         : q.type === "long_answer"
                           ? "Long Answer"
-                          : "Attachment"}
+                          : q.type === "prompting"
+                            ? "AI Prompt"
+                            : "Attachment"}
                   </span>
                 </div>
                 <p className="mb-4 text-sm font-medium text-gray-900">{q.question}</p>
@@ -305,6 +307,20 @@ export default function AssessmentPage() {
                       placeholder="Describe your answer or paste a link to your file..."
                       rows={3}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+
+                {/* AI Prompting */}
+                {q.type === "prompting" && (
+                  <div>
+                    <p className="mb-2 text-xs text-gray-500">Write your AI prompt below. Craft the best prompt you can to achieve the goal described in the question above.</p>
+                    <textarea
+                      value={answers[i]?.answer || ""}
+                      onChange={(e) => updateAnswer(i, e.target.value)}
+                      placeholder="Enter your AI prompt here..."
+                      rows={6}
+                      className="w-full rounded-md border border-purple-300 bg-purple-50/30 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
                     />
                   </div>
                 )}

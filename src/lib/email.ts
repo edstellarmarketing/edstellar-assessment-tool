@@ -87,6 +87,8 @@ interface ReportAnswer {
   userAnswer: string;
   correctAnswer: string;
   isCorrect: boolean | null;
+  promptScore?: number | null;
+  promptFeedback?: string | null;
 }
 
 export function reportEmailHtml(
@@ -95,16 +97,32 @@ export function reportEmailHtml(
   totalQuestions: number,
   mcqQuestions: number,
   timeTaken: string,
-  answers: ReportAnswer[]
+  answers: ReportAnswer[],
+  promptScore?: number | null
 ): string {
   const answersHtml = answers.map((a, i) => {
-    const borderColor = a.isCorrect === true ? "#bbf7d0" : a.isCorrect === false ? "#fecaca" : "#e5e7eb";
-    const bgColor = a.isCorrect === true ? "#f0fdf4" : a.isCorrect === false ? "#fef2f2" : "#ffffff";
-    const statusLabel = a.isCorrect === true
-      ? '<span style="color: #15803d; font-weight: 600; font-size: 12px;">Correct</span>'
-      : a.isCorrect === false
-        ? '<span style="color: #dc2626; font-weight: 600; font-size: 12px;">Incorrect</span>'
-        : '';
+    let borderColor = "#e5e7eb";
+    let bgColor = "#ffffff";
+    let statusLabel = "";
+
+    if (a.type === "prompting" && a.promptScore != null) {
+      borderColor = a.promptScore >= 7 ? "#bbf7d0" : a.promptScore >= 4 ? "#fde68a" : "#fecaca";
+      bgColor = a.promptScore >= 7 ? "#f0fdf4" : a.promptScore >= 4 ? "#fffbeb" : "#fef2f2";
+      statusLabel = `<span style="color: ${a.promptScore >= 7 ? '#15803d' : a.promptScore >= 4 ? '#ca8a04' : '#dc2626'}; font-weight: 600; font-size: 12px;">Score: ${a.promptScore}/10</span>`;
+    } else if (a.type === "prompting") {
+      borderColor = "#e9d5ff";
+      bgColor = "#faf5ff";
+    } else if (a.isCorrect === true) {
+      borderColor = "#bbf7d0";
+      bgColor = "#f0fdf4";
+      statusLabel = '<span style="color: #15803d; font-weight: 600; font-size: 12px;">Correct</span>';
+    } else if (a.isCorrect === false) {
+      borderColor = "#fecaca";
+      bgColor = "#fef2f2";
+      statusLabel = '<span style="color: #dc2626; font-weight: 600; font-size: 12px;">Incorrect</span>';
+    }
+
+    const answerLabel = a.type === "prompting" ? "Your Prompt" : "Your Answer";
 
     return `
       <div style="border: 1px solid ${borderColor}; background: ${bgColor}; border-radius: 8px; padding: 14px; margin-bottom: 10px;">
@@ -114,10 +132,16 @@ export function reportEmailHtml(
         </div>
         <p style="margin: 0 0 10px 0; color: #111827; font-size: 14px; font-weight: 500;">${a.question}</p>
         <div style="margin-bottom: 4px;">
-          <span style="color: #6b7280; font-size: 12px; font-weight: 500;">Your Answer:</span>
+          <span style="color: #6b7280; font-size: 12px; font-weight: 500;">${answerLabel}:</span>
           <p style="margin: 2px 0 0 0; color: ${a.userAnswer ? '#374151' : '#9ca3af'}; font-size: 13px; ${!a.userAnswer ? 'font-style: italic;' : ''}">${a.userAnswer || 'No answer provided'}</p>
         </div>
-        ${a.correctAnswer ? `
+        ${a.type === "prompting" && a.promptFeedback ? `
+        <div style="background: #ffffff; border-radius: 6px; padding: 10px; margin-top: 8px;">
+          <span style="color: #7c3aed; font-size: 12px; font-weight: 500;">AI Feedback:</span>
+          <p style="margin: 2px 0 0 0; color: #374151; font-size: 13px;">${a.promptFeedback}</p>
+        </div>
+        ` : ''}
+        ${a.type !== "prompting" && a.correctAnswer ? `
         <div>
           <span style="color: #15803d; font-size: 12px; font-weight: 500;">Correct Answer:</span>
           <p style="margin: 2px 0 0 0; color: #15803d; font-size: 13px;">${a.correctAnswer}</p>
@@ -143,6 +167,12 @@ export function reportEmailHtml(
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">MCQ Score</td>
           <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right; font-size: 14px;">${score} / ${mcqQuestions} (${Math.round((score / mcqQuestions) * 100)}%)</td>
+        </tr>
+        ` : ""}
+        ${promptScore != null ? `
+        <tr>
+          <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Prompt Score</td>
+          <td style="padding: 8px 0; color: #7c3aed; font-weight: 600; text-align: right; font-size: 14px;">${promptScore} / 10</td>
         </tr>
         ` : ""}
         <tr>

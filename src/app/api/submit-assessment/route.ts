@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
         userAnswer,
         correctAnswer: q.correct_answer || "",
         isCorrect: q.type === "mcq" ? isCorrect : null,
+        promptScore: null,
+        promptFeedback: null,
       };
     }
   );
@@ -83,6 +85,7 @@ export async function POST(req: NextRequest) {
     started_at: invite.started_at,
     completed_at: completedAt,
     duration_minutes: assessment.duration_minutes,
+    assessment_type: assessment.assessment_type || "mcq",
   });
 
   if (finishError) {

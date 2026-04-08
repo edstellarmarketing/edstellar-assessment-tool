@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
       report.total_questions,
       report.mcq_questions,
       timeTaken,
-      report.answers || []
+      report.answers || [],
+      report.prompt_score
     ),
   });
 
