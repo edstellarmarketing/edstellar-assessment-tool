@@ -44,14 +44,16 @@ export default function ReportsPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError, status } = await supabase
         .from("finished_assessments")
         .select("*")
         .eq("user_id", session.user.id)
         .order("completed_at", { ascending: false });
 
+      console.log("Reports fetch:", { data, error: fetchError, status });
+
       if (fetchError) {
-        setError("Failed to load reports: " + fetchError.message);
+        setError("Failed to load reports: " + fetchError.message + " (code: " + fetchError.code + ")");
       } else {
         setReports(data || []);
       }

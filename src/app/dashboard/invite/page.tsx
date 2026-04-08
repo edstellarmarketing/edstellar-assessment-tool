@@ -26,6 +26,8 @@ export default function InvitePage() {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // Invite modal
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
@@ -119,6 +121,24 @@ export default function InvitePage() {
     setTimeout(() => setCopied(""), 2000);
   };
 
+  const handleClearInvites = async () => {
+    setClearing(true);
+    const ids = invites.map((inv) => inv.id);
+    const { error: delError } = await supabase
+      .from("invites")
+      .delete()
+      .in("id", ids);
+
+    setClearing(false);
+    setConfirmClear(false);
+
+    if (delError) {
+      setError("Failed to clear invites: " + delError.message);
+    } else {
+      setInvites([]);
+    }
+  };
+
   const statusColor: Record<string, string> = {
     pending: "bg-yellow-50 text-yellow-700",
     started: "bg-blue-50 text-blue-700",
@@ -182,7 +202,34 @@ export default function InvitePage() {
           {/* Sent invites */}
           {invites.length > 0 && (
             <div>
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Sent Invites</h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Sent Invites</h3>
+                {confirmClear ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-red-600">Clear all invites?</span>
+                    <button
+                      onClick={handleClearInvites}
+                      disabled={clearing}
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {clearing ? "Clearing..." : "Yes, clear all"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmClear(false)}
+                      className="rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    className="rounded-md bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
               <div className="overflow-hidden rounded-lg bg-white shadow-sm">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-gray-200 bg-gray-50">
