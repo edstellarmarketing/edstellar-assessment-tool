@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
@@ -51,6 +51,18 @@ const OPENROUTER_MODELS = [
   { id: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", provider: "Qwen" },
 ];
 
+interface SettingsData {
+  openrouter_api_key: string;
+  tavily_api_key: string;
+  openrouter_model: string;
+}
+
+const EMPTY_SETTINGS: SettingsData = {
+  openrouter_api_key: "",
+  tavily_api_key: "",
+  openrouter_model: "",
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -60,78 +72,86 @@ export default function SettingsPage() {
     text: string;
   } | null>(null);
 
-  const [keys, setKeys] = useState<Record<string, string>>({
-    openrouter_api_key: "",
-    tavily_api_key: "",
-  });
-  const [savedKeys, setSavedKeys] = useState<Record<string, string>>({
-    openrouter_api_key: "",
-    tavily_api_key: "",
-  });
+  // Current form state
+  const [settings, setSettings] = useState<SettingsData>({ ...EMPTY_SETTINGS });
+  // Last saved state from DB
+  const [savedSettings, setSavedSettings] = useState<SettingsData>({ ...EMPTY_SETTINGS });
+
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
   const [savingField, setSavingField] = useState<string | null>(null);
   const [deletingField, setDeletingField] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState("");
-  const [savedModel, setSavedModel] = useState("");
   const [savingModel, setSavingModel] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        router.push("/");
-        return;
-      }
-
-      setUser(session.user);
-
-      const { data } = await supabase
-        .from("settings")
-        .select("openrouter_api_key, tavily_api_key, openrouter_model")
-        .eq("user_id", session.user.id)
-        .single();
-
-      if (data) {
-        const loaded: Record<string, string> = {
-          openrouter_api_key: data.openrouter_api_key || "",
-          tavily_api_key: data.tavily_api_key || "",
-        };
-        setKeys(loaded);
-        setSavedKeys(loaded);
-        setSelectedModel(data.openrouter_model || "");
-        setSavedModel(data.openrouter_model || "");
-      }
-
-      setLoading(false);
-    };
-
-    init();
-  }, [router]);
-
-  const showMessage = (type: "success" | "error", text: string) => {
+  const showMessage = useCallback((type: "success" | "error", text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
-  };
+  }, []);
 
-  const ensureSettingsRow = async () => {
-    if (!user) return false;
-    const { data } = await supabase
+  const fetchSettings = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
       .from("settings")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .single();
+      .select("openrouter_api_key, tavily_api_key, openrouter_model")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    if (!data) {
-      const { error } = await supabase.from("settings").insert({
-        user_id: user.id,
-      });
-      if (error) return false;
+    if (error) {
+      console.error("Failed to fetch settings:", error);
+      return;
     }
+
+    if (data) {
+      const loaded: SettingsData = {
+        openrouter_api_key: data.openrouter_api_key || "",
+        tavily_api_key: data.tavily_api_key || "",
+        openrouter_model: data.openrouter_model || "",
+      };
+      setSettings(loaded);
+      setSavedSettings(loaded);
+    }
+  }, []);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!session) {
+          router.push("/");
+          return;
+        }
+
+        setUser(session.user);
+        await fetchSettings(session.user.id);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router, fetchSettings]);
+
+  // Save a single field — always writes all fields to prevent overwrites
+  const saveToDb = async (newSettings: SettingsData): Promise<boolean> => {
+    if (!user) return false;
+
+    const { error } = await supabase.from("settings").upsert(
+      {
+        user_id: user.id,
+        openrouter_api_key: newSettings.openrouter_api_key || null,
+        tavily_api_key: newSettings.tavily_api_key || null,
+        openrouter_model: newSettings.openrouter_model || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+
+    if (error) {
+      console.error("Failed to save settings:", error);
+      return false;
+    }
+
+    setSavedSettings({ ...newSettings });
     return true;
   };
 
@@ -139,29 +159,17 @@ export default function SettingsPage() {
     if (!user) return;
     setSavingField(field);
 
-    const rowExists = await ensureSettingsRow();
-    if (!rowExists) {
-      setSavingField(null);
-      showMessage("error", "Failed to save key.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("settings")
-      .update({
-        [field]: keys[field] || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id);
+    const newSettings = { ...savedSettings, [field]: settings[field as keyof SettingsData] };
+    const ok = await saveToDb(newSettings);
 
     setSavingField(null);
 
-    if (error) {
-      showMessage("error", "Failed to save key.");
-    } else {
-      setSavedKeys((prev) => ({ ...prev, [field]: keys[field] }));
+    if (ok) {
+      setSettings(newSettings);
       setEditing((prev) => ({ ...prev, [field]: false }));
       showMessage("success", "API key saved.");
+    } else {
+      showMessage("error", "Failed to save key.");
     }
   };
 
@@ -169,29 +177,26 @@ export default function SettingsPage() {
     if (!user) return;
     setDeletingField(field);
 
-    const { error } = await supabase
-      .from("settings")
-      .update({
-        [field]: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id);
+    const newSettings = { ...savedSettings, [field]: "" };
+    const ok = await saveToDb(newSettings);
 
     setDeletingField(null);
     setConfirmDelete(null);
 
-    if (error) {
-      showMessage("error", "Failed to delete key.");
-    } else {
-      setKeys((prev) => ({ ...prev, [field]: "" }));
-      setSavedKeys((prev) => ({ ...prev, [field]: "" }));
+    if (ok) {
+      setSettings(newSettings);
       setEditing((prev) => ({ ...prev, [field]: false }));
       showMessage("success", "API key deleted.");
+    } else {
+      showMessage("error", "Failed to delete key.");
     }
   };
 
   const handleCancel = (field: string) => {
-    setKeys((prev) => ({ ...prev, [field]: savedKeys[field] }));
+    setSettings((prev) => ({
+      ...prev,
+      [field]: savedSettings[field as keyof SettingsData],
+    }));
     setEditing((prev) => ({ ...prev, [field]: false }));
     setConfirmDelete(null);
   };
@@ -200,28 +205,15 @@ export default function SettingsPage() {
     if (!user) return;
     setSavingModel(true);
 
-    const rowExists = await ensureSettingsRow();
-    if (!rowExists) {
-      setSavingModel(false);
-      showMessage("error", "Failed to save model.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("settings")
-      .update({
-        openrouter_model: selectedModel || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id);
+    const newSettings = { ...savedSettings, openrouter_model: settings.openrouter_model };
+    const ok = await saveToDb(newSettings);
 
     setSavingModel(false);
 
-    if (error) {
-      showMessage("error", "Failed to save model.");
-    } else {
-      setSavedModel(selectedModel);
+    if (ok) {
       showMessage("success", "Model saved.");
+    } else {
+      showMessage("error", "Failed to save model.");
     }
   };
 
@@ -307,18 +299,20 @@ export default function SettingsPage() {
                   Choose which LLM model to use via OpenRouter
                 </p>
               </div>
-              {savedModel && (
+              {savedSettings.openrouter_model && (
                 <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                  {OPENROUTER_MODELS.find((m) => m.id === savedModel)?.name ||
-                    savedModel}
+                  {OPENROUTER_MODELS.find((m) => m.id === savedSettings.openrouter_model)?.name ||
+                    savedSettings.openrouter_model}
                 </span>
               )}
             </div>
 
             <div className="mt-4">
               <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
+                value={settings.openrouter_model}
+                onChange={(e) =>
+                  setSettings((prev) => ({ ...prev, openrouter_model: e.target.value }))
+                }
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Select a model...</option>
@@ -345,27 +339,33 @@ export default function SettingsPage() {
               <button
                 onClick={handleSaveModel}
                 disabled={
-                  savingModel || selectedModel === savedModel
+                  savingModel || settings.openrouter_model === savedSettings.openrouter_model
                 }
                 className="rounded-md bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {savingModel ? "Saving..." : "Save Model"}
               </button>
-              {savedModel && selectedModel !== savedModel && (
-                <button
-                  onClick={() => setSelectedModel(savedModel)}
-                  className="rounded-md bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-              )}
+              {savedSettings.openrouter_model &&
+                settings.openrouter_model !== savedSettings.openrouter_model && (
+                  <button
+                    onClick={() =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        openrouter_model: savedSettings.openrouter_model,
+                      }))
+                    }
+                    className="rounded-md bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                )}
             </div>
           </div>
 
           <div className="space-y-4">
             {API_KEYS.map((apiKey) => {
-              const value = keys[apiKey.field];
-              const saved = savedKeys[apiKey.field];
+              const value = settings[apiKey.field];
+              const saved = savedSettings[apiKey.field];
               const isEditing = editing[apiKey.field];
               const isVisible = visibility[apiKey.field];
               const hasSavedKey = !!saved;
@@ -466,7 +466,7 @@ export default function SettingsPage() {
                         type="text"
                         value={value}
                         onChange={(e) =>
-                          setKeys((prev) => ({
+                          setSettings((prev) => ({
                             ...prev,
                             [apiKey.field]: e.target.value,
                           }))
