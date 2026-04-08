@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 interface DetailedAnswer {
@@ -40,6 +41,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [reports, setReports] = useState<FinishedAssessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -301,6 +303,12 @@ export default function ReportsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => router.push(`/dashboard/reports/${r.id}`)}
+                          className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        >
+                          View Report
+                        </button>
                         <button
                           onClick={() => setViewReport(r)}
                           className="rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
