@@ -425,24 +425,24 @@ export default function IndividualReportPage() {
           )}
 
           {/* Candidate Header */}
-          <div className="mb-6 rounded-lg bg-white p-6 shadow-sm">
-            <div className="flex items-start justify-between">
+          <div className="mb-6 rounded-lg bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               {/* Left: Profile */}
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-lg font-bold text-white">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gray-800 text-sm font-bold text-white">
                   {getInitials(report.participant_email)}
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-gray-900 truncate">
                     {report.participant_email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                   </h2>
-                  <p className="text-sm text-gray-500">{report.participant_email}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                    <span>
+                  <p className="text-xs text-gray-500 truncate">{report.participant_email}</p>
+                  <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-gray-400 sm:grid-cols-2">
+                    <span className="truncate">
                       <span className="font-medium text-gray-500">ASSESSMENT</span>{" "}
                       {report.assessment_name}
                     </span>
-                    <span>
+                    <span className="truncate">
                       <span className="font-medium text-gray-500">TOPIC</span> {report.topic}
                     </span>
                     <span>
@@ -458,19 +458,19 @@ export default function IndividualReportPage() {
               </div>
 
               {/* Right: Composite Score */}
-              <div className="text-right">
-                <p className="text-xs font-medium tracking-wider text-gray-400">COMPOSITE SCORE</p>
-                <p className="text-5xl font-bold text-gray-900">
+              <div className="flex-shrink-0 lg:text-right">
+                <p className="text-[10px] font-medium tracking-wider text-gray-400">COMPOSITE SCORE</p>
+                <p className="text-3xl font-bold text-gray-900">
                   {scorePct}
-                  <span className="text-xl font-normal text-gray-400">/100</span>
+                  <span className="text-base font-normal text-gray-400">/100</span>
                 </p>
                 <span
-                  className={`mt-1 inline-block rounded border px-2.5 py-0.5 text-xs font-semibold ${performance.color}`}
+                  className={`mt-1 inline-block rounded border px-2 py-0.5 text-[10px] font-semibold ${performance.color}`}
                 >
                   {performance.label}
                 </span>
                 {siblings.length > 1 && (
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-[11px] text-gray-400">
                     Rank {rank} of {siblings.length}{" "}
                     <span className="text-gray-300">
                       &middot; Top {Math.round((rank / siblings.length) * 100)}%
@@ -482,49 +482,49 @@ export default function IndividualReportPage() {
           </div>
 
           {/* Score Cards */}
-          <div className={`mb-6 grid gap-4 ${isPrompting ? "grid-cols-3" : mcqAnswers.length > 0 && promptAnswers.length > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
+          <div className={`mb-6 grid gap-3 ${isPrompting ? "grid-cols-2 sm:grid-cols-3" : mcqAnswers.length > 0 && promptAnswers.length > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
             {mcqAnswers.length > 0 && (
-              <div className="rounded-lg bg-white p-5 shadow-sm">
-                <p className="text-xs font-semibold tracking-wider text-blue-600">KNOWLEDGE - MCQ</p>
-                <p className="mt-1 text-3xl font-bold text-gray-900">
+              <div className="rounded-lg bg-white p-4 shadow-sm">
+                <p className="text-[10px] font-semibold tracking-wider text-blue-600">KNOWLEDGE - MCQ</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">
                   {Math.round((mcqCorrect / mcqAnswers.length) * 100)}
-                  <span className="text-base font-normal text-gray-400">/100</span>
+                  <span className="text-sm font-normal text-gray-400">/100</span>
                 </p>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-[11px] text-gray-400">
                   {mcqCorrect} of {mcqAnswers.length} correct &middot; auto-graded
                 </p>
               </div>
             )}
             {promptAnswers.length > 0 && (
-              <div className="rounded-lg bg-white p-5 shadow-sm">
-                <p className="text-xs font-semibold tracking-wider text-purple-600">AI PROMPTING</p>
+              <div className="rounded-lg bg-white p-4 shadow-sm">
+                <p className="text-[10px] font-semibold tracking-wider text-purple-600">AI PROMPTING</p>
                 {report.prompt_evaluated && report.prompt_score != null ? (
                   <>
-                    <p className="mt-1 text-3xl font-bold text-gray-900">
+                    <p className="mt-1 text-2xl font-bold text-gray-900">
                       {Math.round(report.prompt_score * 10)}
-                      <span className="text-base font-normal text-gray-400">/100</span>
+                      <span className="text-sm font-normal text-gray-400">/100</span>
                     </p>
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-[11px] text-gray-400">
                       {promptAnswers.length} prompt{promptAnswers.length !== 1 ? "s" : ""} &middot; AI-scored
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="mt-1 text-2xl font-bold text-gray-300">--</p>
-                    <p className="mt-1 text-xs text-yellow-600">Not yet evaluated</p>
+                    <p className="mt-1 text-xl font-bold text-gray-300">--</p>
+                    <p className="mt-1 text-[11px] text-yellow-600">Not yet evaluated</p>
                   </>
                 )}
               </div>
             )}
-            <div className="rounded-lg bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold tracking-wider text-gray-500">COHORT PERCENTILE</p>
+            <div className="rounded-lg bg-white p-4 shadow-sm">
+              <p className="text-[10px] font-semibold tracking-wider text-gray-500">COHORT PERCENTILE</p>
               {siblings.length > 1 ? (
                 <>
-                  <p className="mt-1 text-3xl font-bold text-gray-900">
+                  <p className="mt-1 text-2xl font-bold text-gray-900">
                     {Math.round(((siblings.length - rank) / (siblings.length - 1)) * 100)}
-                    <span className="text-base font-normal text-gray-400">th</span>
+                    <span className="text-sm font-normal text-gray-400">th</span>
                   </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-[11px] text-gray-400">
                     {scorePct > avgCohortScore ? (
                       <span className="text-green-600">&#9650; above</span>
                     ) : scorePct < avgCohortScore ? (
@@ -537,8 +537,8 @@ export default function IndividualReportPage() {
                 </>
               ) : (
                 <>
-                  <p className="mt-1 text-2xl font-bold text-gray-300">--</p>
-                  <p className="mt-1 text-xs text-gray-400">Only 1 participant</p>
+                  <p className="mt-1 text-xl font-bold text-gray-300">--</p>
+                  <p className="mt-1 text-[11px] text-gray-400">Only 1 participant</p>
                 </>
               )}
             </div>
@@ -574,13 +574,13 @@ export default function IndividualReportPage() {
 
           {/* Section 01: Competency Breakdown */}
           {report.answers.length > 0 && (
-            <div className="mb-6 rounded-lg bg-white p-6 shadow-sm">
+            <div className="mb-6 rounded-lg bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  <span className="mr-2 text-sm font-bold text-orange-500">01</span>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  <span className="mr-1.5 text-xs font-bold text-orange-500">01</span>
                   Competency breakdown
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-[11px] text-gray-400">
                   {report.total_questions} questions &middot; by question type
                 </p>
               </div>
@@ -664,13 +664,13 @@ export default function IndividualReportPage() {
           )}
 
           {/* Section 02: Question-level Results */}
-          <div className="mb-6 rounded-lg bg-white p-6 shadow-sm">
+          <div className="mb-6 rounded-lg bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                <span className="mr-2 text-sm font-bold text-orange-500">02</span>
+              <h3 className="text-sm font-semibold text-gray-900">
+                <span className="mr-1.5 text-xs font-bold text-orange-500">02</span>
                 Question-level results
               </h3>
-              <p className="text-xs text-gray-400">{report.total_questions} questions</p>
+              <p className="text-[11px] text-gray-400">{report.total_questions} questions</p>
             </div>
 
             {/* Question List */}
@@ -865,9 +865,9 @@ export default function IndividualReportPage() {
           </div>
 
           {/* Section 03: Session Info */}
-          <div className="mb-6 rounded-lg bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">
-              <span className="mr-2 text-sm font-bold text-orange-500">03</span>
+          <div className="mb-6 rounded-lg bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-semibold text-gray-900">
+              <span className="mr-1.5 text-xs font-bold text-orange-500">03</span>
               Session information
             </h3>
 
@@ -908,41 +908,41 @@ export default function IndividualReportPage() {
           </div>
 
           {/* Footer Navigation */}
-          <div className="flex items-center justify-between rounded-lg bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 rounded-lg bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => prevCandidate && navigateToReport(prevCandidate.id)}
                 disabled={!prevCandidate}
-                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                &larr; Previous candidate
+                &larr; Previous
               </button>
               <button
                 onClick={() => nextCandidate && navigateToReport(nextCandidate.id)}
                 disabled={!nextCandidate}
-                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Next candidate &rarr;
+                Next &rarr;
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {sendStatus && (
                 <span
-                  className={`text-sm ${sendStatus.success ? "text-green-600" : "text-red-600"}`}
+                  className={`text-xs ${sendStatus.success ? "text-green-600" : "text-red-600"}`}
                 >
                   {sendStatus.message}
                 </span>
               )}
-              <span className="text-xs text-gray-400">
+              <span className="hidden text-[11px] text-gray-400 sm:inline">
                 Report generated {formatDate(report.completed_at)}
               </span>
               <button
                 onClick={sendResults}
                 disabled={sendingResults}
-                className="rounded-md border border-gray-900 bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                className="rounded-md border border-gray-900 bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
               >
-                {sendingResults ? "Sending..." : "Send Results to Participant"}
+                {sendingResults ? "Sending..." : "Send Results"}
               </button>
             </div>
           </div>
