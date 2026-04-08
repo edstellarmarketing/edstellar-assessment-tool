@@ -38,6 +38,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [viewReport, setViewReport] = useState<FinishedAssessment | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sendStatus, setSendStatus] = useState<{ id: string; success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -80,6 +82,35 @@ export default function ReportsPage() {
     const m = Math.floor(diff / 60);
     const s = diff % 60;
     return `${m}m ${s}s`;
+  };
+
+  const sendResults = async (report: FinishedAssessment) => {
+    setSendingId(report.id);
+    setSendStatus(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch("/api/send-results", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ reportId: report.id }),
+      });
+
+      const data = await res.json();
+      setSendStatus({
+        id: report.id,
+        success: data.sent,
+        message: data.sent ? "Results sent!" : (data.reason || "Failed to send"),
+      });
+    } catch {
+      setSendStatus({ id: report.id, success: false, message: "Network error" });
+    } finally {
+      setSendingId(null);
+    }
   };
 
   const getScoreColor = (score: number, total: number) => {
@@ -189,12 +220,26 @@ export default function ReportsPage() {
                       {formatDate(r.completed_at)}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setViewReport(r)}
-                        className="rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                      >
-                        View Details
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setViewReport(r)}
+                          className="rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => sendResults(r)}
+                          disabled={sendingId === r.id}
+                          className="rounded-md bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                        >
+                          {sendingId === r.id ? "Sending..." : "Send Results"}
+                        </button>
+                        {sendStatus?.id === r.id && (
+                          <span className={`text-xs ${sendStatus.success ? "text-green-600" : "text-red-600"}`}>
+                            {sendStatus.message}
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -298,7 +343,19 @@ export default function ReportsPage() {
               ))}
             </div>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex items-center justify-end gap-3">
+              {sendStatus?.id === viewReport.id && (
+                <span className={`text-sm ${sendStatus.success ? "text-green-600" : "text-red-600"}`}>
+                  {sendStatus.message}
+                </span>
+              )}
+              <button
+                onClick={() => sendResults(viewReport)}
+                disabled={sendingId === viewReport.id}
+                className="rounded-md bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {sendingId === viewReport.id ? "Sending..." : "Send Results to Participant"}
+              </button>
               <button
                 onClick={() => setViewReport(null)}
                 className="rounded-md bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
