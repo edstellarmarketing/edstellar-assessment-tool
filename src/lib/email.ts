@@ -12,73 +12,89 @@ interface EmailResult {
 
 async function sendViaResend(options: EmailOptions): Promise<EmailResult> {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return { sent: false, reason: "Resend not configured" };
+  if (!key) return { sent: false, reason: "RESEND_API_KEY not set" };
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "Assessment Tool <onboarding@resend.dev>",
-      to: [options.to],
-      subject: options.subject,
-      html: options.html,
-    }),
-  });
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM_EMAIL || "Assessment Tool <onboarding@resend.dev>",
+        to: [options.to],
+        subject: options.subject,
+        html: options.html,
+      }),
+    });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("Resend error:", errText);
-    return { sent: false, reason: `Resend failed: ${res.status}` };
+    const body = await res.text();
+
+    if (!res.ok) {
+      console.error("Resend error response:", res.status, body);
+      return { sent: false, reason: `Resend: ${body}` };
+    }
+
+    console.log("Resend success:", body);
+    return { sent: true, provider: "Resend" };
+  } catch (e) {
+    console.error("Resend exception:", e);
+    return { sent: false, reason: `Resend exception: ${e}` };
   }
-
-  return { sent: true, provider: "Resend" };
 }
 
 async function sendViaBrevo(options: EmailOptions): Promise<EmailResult> {
   const key = process.env.BREVO_API_KEY;
-  if (!key) return { sent: false, reason: "Brevo not configured" };
+  if (!key) return { sent: false, reason: "BREVO_API_KEY not set" };
 
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": key,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      sender: { name: "Assessment Tool", email: "no-reply@assessment-tool.com" },
-      to: [{ email: options.to }],
-      subject: options.subject,
-      htmlContent: options.html,
-    }),
-  });
+  // Brevo requires a verified sender email
+  const senderEmail = process.env.BREVO_SENDER_EMAIL;
+  if (!senderEmail) return { sent: false, reason: "BREVO_SENDER_EMAIL not set" };
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("Brevo error:", errText);
-    return { sent: false, reason: `Brevo failed: ${res.status}` };
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": key,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { name: "Assessment Tool", email: senderEmail },
+        to: [{ email: options.to }],
+        subject: options.subject,
+        htmlContent: options.html,
+      }),
+    });
+
+    const body = await res.text();
+
+    if (!res.ok) {
+      console.error("Brevo error response:", res.status, body);
+      return { sent: false, reason: `Brevo: ${body}` };
+    }
+
+    console.log("Brevo success:", body);
+    return { sent: true, provider: "Brevo" };
+  } catch (e) {
+    console.error("Brevo exception:", e);
+    return { sent: false, reason: `Brevo exception: ${e}` };
   }
-
-  return { sent: true, provider: "Brevo" };
 }
 
 // Try Resend first, fallback to Brevo
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   const providers = [sendViaResend, sendViaBrevo];
+  const errors: string[] = [];
 
   for (const provider of providers) {
-    try {
-      const result = await provider(options);
-      if (result.sent) return result;
-      console.log(`Provider attempt failed:`, result.reason);
-    } catch (e) {
-      console.error("Email provider error:", e);
-    }
+    const result = await provider(options);
+    if (result.sent) return result;
+    if (result.reason) errors.push(result.reason);
   }
 
-  return { sent: false, reason: "No email provider available" };
+  return { sent: false, reason: errors.join(" | ") };
 }
 
 // Pre-built email templates
