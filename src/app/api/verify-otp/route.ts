@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invite ID and OTP are required" }, { status: 400 });
   }
 
-  const { data: invite, error } = await supabaseAdmin
+  const { data: invite, error } = await getSupabaseAdmin()
     .from("invites")
     .select("*, assessments(id, name, topic, total_questions, duration_minutes, questions)")
     .eq("id", inviteId)
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   // Check if invite has expired (7 days)
   if (new Date(invite.expires_at) < new Date()) {
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from("invites")
       .update({ status: "expired" })
       .eq("id", inviteId);
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   // Mark as started if pending
   if (invite.status === "pending") {
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from("invites")
       .update({ status: "started", started_at: new Date().toISOString() })
       .eq("id", inviteId);

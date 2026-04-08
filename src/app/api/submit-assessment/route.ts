@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Get invite
-  const { data: invite, error } = await supabaseAdmin
+  const { data: invite, error } = await getSupabaseAdmin()
     .from("invites")
     .select("*, assessments(id, questions)")
     .eq("id", inviteId)
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   );
 
   // Save response
-  const { error: saveError } = await supabaseAdmin.from("responses").insert({
+  const { error: saveError } = await getSupabaseAdmin().from("responses").insert({
     invite_id: inviteId,
     assessment_id: assessment.id,
     answers,
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Mark invite as completed
-  await supabaseAdmin
+  await getSupabaseAdmin()
     .from("invites")
     .update({ status: "completed", completed_at: new Date().toISOString() })
     .eq("id", inviteId);
