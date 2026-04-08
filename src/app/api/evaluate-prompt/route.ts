@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -135,11 +136,12 @@ Rules:
     const evaluations = JSON.parse(jsonMatch[0]);
 
     // Update the answers with prompt scores
+    let promptIdx = 0;
     const updatedAnswers = answers.map((a: { type: string; question: string; userAnswer: string; promptScore: number | null; promptFeedback: string | null }) => {
       if (a.type !== "prompting") return a;
 
-      const evalIndex = promptAnswers.indexOf(a);
-      const evaluation = evaluations[evalIndex];
+      const evaluation = evaluations[promptIdx];
+      promptIdx++;
 
       return {
         ...a,
@@ -155,8 +157,9 @@ Rules:
     );
     const avgPromptScore = Math.round((totalPromptScore / evaluations.length) * 10) / 10;
 
-    // Update the finished_assessments record
-    const { error: updateError } = await supabase
+    // Update the finished_assessments record using admin client to bypass RLS
+    const admin = getSupabaseAdmin();
+    const { error: updateError } = await admin
       .from("finished_assessments")
       .update({
         answers: updatedAnswers,
