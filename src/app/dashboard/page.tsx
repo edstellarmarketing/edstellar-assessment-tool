@@ -45,9 +45,25 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <h1 className="text-xl font-semibold text-gray-900">
-            Admin Dashboard
-          </h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-xl font-semibold text-gray-900">
+              Admin Dashboard
+            </h1>
+            <nav className="flex items-center gap-4">
+              <a
+                href="/dashboard"
+                className="text-sm font-medium text-gray-900"
+              >
+                Home
+              </a>
+              <a
+                href="/dashboard/settings"
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Settings
+              </a>
+            </nav>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user?.email}</span>
             <button
