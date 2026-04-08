@@ -77,7 +77,15 @@ export default function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-12">
-        {/* Empty dashboard - add content here */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900">Assessments</h2>
+          <a
+            href="/dashboard/assessments/new"
+            className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+          >
+            + Create New Assessment
+          </a>
+        </div>
       </main>
     </div>
   );
