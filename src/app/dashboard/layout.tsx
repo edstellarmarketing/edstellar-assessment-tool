@@ -110,9 +110,11 @@ export default function DashboardLayout({
         }`}
       >
         <div className="flex h-16 items-center gap-3 border-b border-gray-800 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-            A
-          </div>
+          <img
+            src="/edstellar-logo.png"
+            alt="Edstellar"
+            className="h-8 w-auto"
+          />
           <span className="text-sm font-semibold text-white">
             Assessment Tool
           </span>
