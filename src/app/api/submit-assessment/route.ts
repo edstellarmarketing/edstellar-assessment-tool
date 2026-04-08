@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   sendEmail({
     to: invite.email,
     subject: `Assessment Completed: ${assessment.name}`,
-    html: reportEmailHtml(assessment.name, correctCount, totalQuestions, mcqCount, timeTaken),
+    html: reportEmailHtml(assessment.name, correctCount, totalQuestions, mcqCount, timeTaken, detailedAnswers),
   }).catch((e) => console.error("Report email error:", e));
 
   return NextResponse.json({

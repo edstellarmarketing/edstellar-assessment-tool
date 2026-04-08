@@ -81,15 +81,54 @@ export function inviteEmailHtml(assessmentName: string, inviteLink: string, otp:
   `;
 }
 
+interface ReportAnswer {
+  question: string;
+  type: string;
+  userAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean | null;
+}
+
 export function reportEmailHtml(
   assessmentName: string,
   score: number,
   totalQuestions: number,
   mcqQuestions: number,
-  timeTaken: string
+  timeTaken: string,
+  answers: ReportAnswer[]
 ): string {
+  const answersHtml = answers.map((a, i) => {
+    const borderColor = a.isCorrect === true ? "#bbf7d0" : a.isCorrect === false ? "#fecaca" : "#e5e7eb";
+    const bgColor = a.isCorrect === true ? "#f0fdf4" : a.isCorrect === false ? "#fef2f2" : "#ffffff";
+    const statusLabel = a.isCorrect === true
+      ? '<span style="color: #15803d; font-weight: 600; font-size: 12px;">Correct</span>'
+      : a.isCorrect === false
+        ? '<span style="color: #dc2626; font-weight: 600; font-size: 12px;">Incorrect</span>'
+        : '';
+
+    return `
+      <div style="border: 1px solid ${borderColor}; background: ${bgColor}; border-radius: 8px; padding: 14px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #9ca3af; font-size: 12px; font-weight: 500;">Question ${i + 1}</span>
+          ${statusLabel}
+        </div>
+        <p style="margin: 0 0 10px 0; color: #111827; font-size: 14px; font-weight: 500;">${a.question}</p>
+        <div style="margin-bottom: 4px;">
+          <span style="color: #6b7280; font-size: 12px; font-weight: 500;">Your Answer:</span>
+          <p style="margin: 2px 0 0 0; color: ${a.userAnswer ? '#374151' : '#9ca3af'}; font-size: 13px; ${!a.userAnswer ? 'font-style: italic;' : ''}">${a.userAnswer || 'No answer provided'}</p>
+        </div>
+        ${a.correctAnswer ? `
+        <div>
+          <span style="color: #15803d; font-size: 12px; font-weight: 500;">Correct Answer:</span>
+          <p style="margin: 2px 0 0 0; color: #15803d; font-size: 13px;">${a.correctAnswer}</p>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
   return `
-    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #111827;">Assessment Report</h2>
       <p style="color: #4b5563;">You have successfully completed the following assessment:</p>
       <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 16px 0;">
@@ -111,8 +150,12 @@ export function reportEmailHtml(
           <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right; font-size: 14px;">${timeTaken}</td>
         </tr>
       </table>
+
+      <h3 style="color: #111827; margin: 24px 0 12px 0; font-size: 16px;">Detailed Results</h3>
+      ${answersHtml}
+
       <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">
-        Thank you for completing the assessment. Your detailed results have been shared with the assessment administrator.
+        Thank you for completing the assessment.
       </p>
     </div>
   `;
