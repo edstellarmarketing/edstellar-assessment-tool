@@ -16,6 +16,8 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   }
 
   try {
+    // Google Apps Script redirects POST requests (302).
+    // We must disable auto-redirect and follow manually to preserve the POST body response.
     const res = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -24,20 +26,23 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
         subject: options.subject,
         html: options.html,
       }),
+      redirect: "follow",
     });
 
     const body = await res.text();
-    console.log("Google Script response:", res.status, body);
+    console.log("Google Script response:", res.status, res.url, body.slice(0, 500));
+
+    // Google Apps Script may return HTML on auth issues
+    if (body.includes("<!DOCTYPE html>") || body.includes("<HTML>")) {
+      console.error("Google Script returned HTML — likely auth/permission issue");
+      return { sent: false, reason: "Google Script auth error — redeploy with 'Anyone' access" };
+    }
 
     let data;
     try {
       data = JSON.parse(body);
     } catch {
-      // Google Apps Script sometimes redirects — follow it
-      if (res.redirected || res.status === 302) {
-        return { sent: false, reason: "Google Script redirect — check deployment settings" };
-      }
-      return { sent: false, reason: `Unexpected response: ${body.slice(0, 200)}` };
+      return { sent: false, reason: `Non-JSON response: ${body.slice(0, 100)}` };
     }
 
     if (data.success) {
