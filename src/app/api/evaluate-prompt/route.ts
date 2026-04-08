@@ -159,6 +159,8 @@ Rules:
 
     // Update the finished_assessments record using admin client to bypass RLS
     const admin = getSupabaseAdmin();
+
+    // Try full update first (with prompt_score and prompt_evaluated columns)
     const { error: updateError } = await admin
       .from("finished_assessments")
       .update({
@@ -169,8 +171,17 @@ Rules:
       .eq("id", reportId);
 
     if (updateError) {
-      console.error("Update error:", updateError);
-      return NextResponse.json({ error: "Failed to save evaluation" }, { status: 500 });
+      console.error("Full update error (trying answers-only fallback):", updateError);
+      // Fallback: update only the answers JSON field (always exists)
+      const { error: fallbackError } = await admin
+        .from("finished_assessments")
+        .update({ answers: updatedAnswers })
+        .eq("id", reportId);
+
+      if (fallbackError) {
+        console.error("Fallback update error:", fallbackError);
+        return NextResponse.json({ error: "Failed to save evaluation" }, { status: 500 });
+      }
     }
 
     return NextResponse.json({
