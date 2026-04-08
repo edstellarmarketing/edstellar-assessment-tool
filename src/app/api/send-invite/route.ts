@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     email,
     emailSent: emailResult.sent,
     emailNote: emailResult.sent
-      ? `Email sent via ${emailResult.provider}`
+      ? "Email sent successfully"
       : emailResult.reason,
   });
 }

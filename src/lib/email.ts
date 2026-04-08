@@ -6,95 +6,49 @@ interface EmailOptions {
 
 interface EmailResult {
   sent: boolean;
-  provider?: string;
   reason?: string;
 }
 
-async function sendViaResend(options: EmailOptions): Promise<EmailResult> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return { sent: false, reason: "RESEND_API_KEY not set" };
+export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
+  const scriptUrl = process.env.GOOGLE_SCRIPT_EMAIL_URL;
+  if (!scriptUrl) {
+    return { sent: false, reason: "GOOGLE_SCRIPT_EMAIL_URL not set" };
+  }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch(scriptUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL || "Assessment Tool <onboarding@resend.dev>",
-        to: [options.to],
+        to: options.to,
         subject: options.subject,
         html: options.html,
       }),
     });
 
     const body = await res.text();
+    console.log("Google Script response:", res.status, body);
 
-    if (!res.ok) {
-      console.error("Resend error response:", res.status, body);
-      return { sent: false, reason: `Resend: ${body}` };
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      // Google Apps Script sometimes redirects — follow it
+      if (res.redirected || res.status === 302) {
+        return { sent: false, reason: "Google Script redirect — check deployment settings" };
+      }
+      return { sent: false, reason: `Unexpected response: ${body.slice(0, 200)}` };
     }
 
-    console.log("Resend success:", body);
-    return { sent: true, provider: "Resend" };
-  } catch (e) {
-    console.error("Resend exception:", e);
-    return { sent: false, reason: `Resend exception: ${e}` };
-  }
-}
-
-async function sendViaBrevo(options: EmailOptions): Promise<EmailResult> {
-  const key = process.env.BREVO_API_KEY;
-  if (!key) return { sent: false, reason: "BREVO_API_KEY not set" };
-
-  // Brevo requires a verified sender email
-  const senderEmail = process.env.BREVO_SENDER_EMAIL;
-  if (!senderEmail) return { sent: false, reason: "BREVO_SENDER_EMAIL not set" };
-
-  try {
-    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "api-key": key,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        sender: { name: "Assessment Tool", email: senderEmail },
-        to: [{ email: options.to }],
-        subject: options.subject,
-        htmlContent: options.html,
-      }),
-    });
-
-    const body = await res.text();
-
-    if (!res.ok) {
-      console.error("Brevo error response:", res.status, body);
-      return { sent: false, reason: `Brevo: ${body}` };
+    if (data.success) {
+      return { sent: true };
     }
 
-    console.log("Brevo success:", body);
-    return { sent: true, provider: "Brevo" };
+    return { sent: false, reason: data.error || "Google Script failed" };
   } catch (e) {
-    console.error("Brevo exception:", e);
-    return { sent: false, reason: `Brevo exception: ${e}` };
+    console.error("Google Script email error:", e);
+    return { sent: false, reason: `Google Script error: ${e}` };
   }
-}
-
-// Try Resend first, fallback to Brevo
-export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
-  const providers = [sendViaResend, sendViaBrevo];
-  const errors: string[] = [];
-
-  for (const provider of providers) {
-    const result = await provider(options);
-    if (result.sent) return result;
-    if (result.reason) errors.push(result.reason);
-  }
-
-  return { sent: false, reason: errors.join(" | ") };
 }
 
 // Pre-built email templates
