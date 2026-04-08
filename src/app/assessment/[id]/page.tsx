@@ -335,17 +335,12 @@ export default function AssessmentPage() {
             <span className="text-3xl">✓</span>
           </div>
           <h1 className="mb-2 text-xl font-bold text-gray-900">Assessment Completed!</h1>
-          <p className="text-sm text-gray-500">
+          <p className="mt-2 text-sm text-gray-600">
             Your responses have been submitted successfully.
           </p>
-          {result && (
-            <div className="mt-4 rounded-lg bg-gray-50 p-4">
-              <p className="text-xs text-gray-500">MCQ Score</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {result.score} / {result.total}
-              </p>
-            </div>
-          )}
+          <p className="mt-3 text-sm text-gray-500">
+            You will receive the report soon to your email.
+          </p>
           <p className="mt-6 text-xs text-gray-400">
             You can close this page now. This link is no longer active.
           </p>
