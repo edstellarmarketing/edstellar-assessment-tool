@@ -38,6 +38,8 @@ export default function InvitePage() {
     otp: string;
     email: string;
     assessmentName: string;
+    emailSent: boolean;
+    emailNote: string;
   } | null>(null);
   const [copied, setCopied] = useState("");
 
@@ -293,9 +295,16 @@ export default function InvitePage() {
               <span className="text-xl">✓</span>
             </div>
             <h3 className="mb-1 text-lg font-bold text-gray-900">Invite Created!</h3>
-            <p className="mb-5 text-sm text-gray-500">
-              Share the link and OTP with <span className="font-medium text-gray-700">{inviteResult.email}</span>
-            </p>
+            {inviteResult.emailSent ? (
+              <div className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
+                Email sent to {inviteResult.email}
+              </div>
+            ) : (
+              <div className="mb-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700">
+                {inviteResult.emailNote || "Email not configured"} — share the link and OTP manually with{" "}
+                <span className="font-medium">{inviteResult.email}</span>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div>
