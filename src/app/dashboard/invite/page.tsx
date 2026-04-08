@@ -295,9 +295,13 @@ export default function InvitePage() {
               <span className="text-xl">✓</span>
             </div>
             <h3 className="mb-1 text-lg font-bold text-gray-900">Invite Created!</h3>
-            {inviteResult.emailSent && (
+            {inviteResult.emailSent ? (
               <div className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
                 Email sent to {inviteResult.email}
+              </div>
+            ) : (
+              <div className="mb-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700">
+                Email not sent: {inviteResult.emailNote || "Unknown error"}
               </div>
             )}
 
