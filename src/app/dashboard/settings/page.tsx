@@ -30,6 +30,27 @@ const API_KEYS: ApiKey[] = [
   },
 ];
 
+const OPENROUTER_MODELS = [
+  { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI" },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI" },
+  { id: "openai/gpt-4.1", name: "GPT-4.1", provider: "OpenAI" },
+  { id: "openai/gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI" },
+  { id: "openai/o3-mini", name: "o3 Mini", provider: "OpenAI" },
+  { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4", provider: "Anthropic" },
+  { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", provider: "Anthropic" },
+  { id: "anthropic/claude-3.5-haiku", name: "Claude 3.5 Haiku", provider: "Anthropic" },
+  { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", provider: "Google" },
+  { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", provider: "Google" },
+  { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash", provider: "Google" },
+  { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta" },
+  { id: "meta-llama/llama-4-scout", name: "Llama 4 Scout", provider: "Meta" },
+  { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B", provider: "Meta" },
+  { id: "deepseek/deepseek-r1", name: "DeepSeek R1", provider: "DeepSeek" },
+  { id: "deepseek/deepseek-chat-v3-0324", name: "DeepSeek V3", provider: "DeepSeek" },
+  { id: "mistralai/mistral-large-2411", name: "Mistral Large", provider: "Mistral" },
+  { id: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", provider: "Qwen" },
+];
+
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -52,6 +73,9 @@ export default function SettingsPage() {
   const [savingField, setSavingField] = useState<string | null>(null);
   const [deletingField, setDeletingField] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [savedModel, setSavedModel] = useState("");
+  const [savingModel, setSavingModel] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -68,7 +92,7 @@ export default function SettingsPage() {
 
       const { data } = await supabase
         .from("settings")
-        .select("openrouter_api_key, tavily_api_key")
+        .select("openrouter_api_key, tavily_api_key, openrouter_model")
         .eq("user_id", session.user.id)
         .single();
 
@@ -79,6 +103,8 @@ export default function SettingsPage() {
         };
         setKeys(loaded);
         setSavedKeys(loaded);
+        setSelectedModel(data.openrouter_model || "");
+        setSavedModel(data.openrouter_model || "");
       }
 
       setLoading(false);
@@ -146,6 +172,29 @@ export default function SettingsPage() {
     setKeys((prev) => ({ ...prev, [field]: savedKeys[field] }));
     setEditing((prev) => ({ ...prev, [field]: false }));
     setConfirmDelete(null);
+  };
+
+  const handleSaveModel = async () => {
+    if (!user) return;
+    setSavingModel(true);
+
+    const { error } = await supabase.from("settings").upsert(
+      {
+        user_id: user.id,
+        openrouter_model: selectedModel || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+
+    setSavingModel(false);
+
+    if (error) {
+      showMessage("error", "Failed to save model.");
+    } else {
+      setSavedModel(selectedModel);
+      showMessage("success", "Model saved.");
+    }
   };
 
   const maskKey = (key: string) => {
@@ -218,6 +267,72 @@ export default function SettingsPage() {
               {message.text}
             </div>
           )}
+
+          {/* Model Selection */}
+          <div className="mb-4 rounded-lg bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">
+                  OpenRouter Model
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose which LLM model to use via OpenRouter
+                </p>
+              </div>
+              {savedModel && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  {OPENROUTER_MODELS.find((m) => m.id === savedModel)?.name ||
+                    savedModel}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Select a model...</option>
+                {(() => {
+                  const grouped: Record<string, typeof OPENROUTER_MODELS> = {};
+                  for (const model of OPENROUTER_MODELS) {
+                    if (!grouped[model.provider]) grouped[model.provider] = [];
+                    grouped[model.provider].push(model);
+                  }
+                  return Object.entries(grouped).map(([provider, models]) => (
+                    <optgroup key={provider} label={provider}>
+                      {models.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ));
+                })()}
+              </select>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={handleSaveModel}
+                disabled={
+                  savingModel || selectedModel === savedModel
+                }
+                className="rounded-md bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingModel ? "Saving..." : "Save Model"}
+              </button>
+              {savedModel && selectedModel !== savedModel && (
+                <button
+                  onClick={() => setSelectedModel(savedModel)}
+                  className="rounded-md bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
 
           <div className="space-y-4">
             {API_KEYS.map((apiKey) => {
