@@ -109,13 +109,13 @@ export default function DashboardLayout({
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-16 items-center gap-3 border-b border-gray-800 px-6">
+        <div className="flex flex-col items-center justify-center gap-1 border-b border-gray-800 px-6 py-4">
           <img
             src="/edstellar-logo.png"
             alt="Edstellar"
-            className="h-8 w-auto"
+            className="h-7 w-auto"
           />
-          <span className="text-sm font-semibold text-white">
+          <span className="text-[10px] font-medium tracking-widest text-gray-400 uppercase">
             Assessment Tool
           </span>
         </div>
